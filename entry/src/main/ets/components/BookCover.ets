@@ -1,7 +1,8 @@
 import { Book } from '../models/Book';
+import { BookRepository } from '../data/BookRepository';
 
 /**
- * 书籍封面组件:色块 + 书名 + 进度
+ * 书籍封面组件:渐变色块 + 书名 + 作者 + 进度徽章
  */
 @Component
 export struct BookCover {
@@ -12,6 +13,23 @@ export struct BookCover {
   };
   /** 是否紧凑模式(最近阅读横幅) */
   compact: boolean = false;
+
+  /** 生成同色系深色作为渐变终点,营造书籍立体感 */
+  private darken(hex: string): string {
+    const h = hex.replace('#', '');
+    if (h.length < 6) {
+      return hex;
+    }
+    const r = Math.max(0, parseInt(h.substring(0, 2), 16) - 40);
+    const g = Math.max(0, parseInt(h.substring(2, 4), 16) - 40);
+    const b = Math.max(0, parseInt(h.substring(4, 6), 16) - 40);
+    return `#${this.hex2(r)}${this.hex2(g)}${this.hex2(b)}`;
+  }
+
+  private hex2(n: number): string {
+    const s = n.toString(16);
+    return s.length < 2 ? `0${s}` : s;
+  }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -47,10 +65,11 @@ export struct BookCover {
             .padding({ left: 4, right: 4, top: 1, bottom: 1 })
             .borderRadius(3)
             .backgroundColor('rgba(0,0,0,0.25)')
-          if (this.book.chapterCount > 0) {
-            Text(`${Math.min(this.book.chapterIndex + 1, this.book.chapterCount)}/${this.book.chapterCount}`)
+          Blank()
+          if (this.book.lastReadAt > 0 && this.book.chapterCount > 0) {
+            Text(`${BookRepository.progressPercent(this.book)}%`)
               .fontSize(this.compact ? 8 : 9)
-              .fontColor('rgba(255,255,255,0.9)')
+              .fontColor('rgba(255,255,255,0.95)')
           }
         }.width('100%')
       }
@@ -58,11 +77,25 @@ export struct BookCover {
       .height('100%')
       .padding(this.compact ? 6 : 10)
       .alignItems(HorizontalAlign.Start)
+
+      // 底部阅读进度条(仅在已读时显示)
+      if (!this.compact && this.book.lastReadAt > 0 && this.book.chapterCount > 0) {
+        Column()
+          .width(`${BookRepository.progressPercent(this.book)}%`)
+          .height(3)
+          .backgroundColor('rgba(255,255,255,0.85)')
+          .position({ x: 0, y: '100%' })
+          .translate({ y: -3 })
+      }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(this.book.coverColor)
+    .linearGradient({
+      angle: 145,
+      colors: [[this.book.coverColor, 0.0], [this.darken(this.book.coverColor), 1.0]]
+    })
     .borderRadius(this.compact ? 8 : 12)
+    .shadow({ radius: this.compact ? 0 : 6, color: 'rgba(0,0,0,0.15)', offsetX: 0, offsetY: this.compact ? 0 : 2 })
     .clip(true)
   }
 }

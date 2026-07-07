@@ -80,6 +80,12 @@ export struct BookDetailPage {
             Text(`大小:${this.formatSize((this.book as Book).size)}`)
               .fontSize(12)
               .fontColor('rgba(58,47,36,0.5)')
+            if ((this.book as Book).lastReadAt > 0) {
+              Text(`已读 ${BookRepository.progressPercent(this.book as Book)}%`)
+                .fontSize(12)
+                .fontColor($r('app.color.primary'))
+                .margin({ top: 2 })
+            }
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)

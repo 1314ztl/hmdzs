@@ -34,6 +34,23 @@ export class Constants {
   /** 卡片 action: 打开书籍 */
   static readonly ACTION_OPEN_BOOK: string = 'ohos.bookreader.action.OPEN_BOOK';
   static readonly PARAM_BOOK_ID: string = 'bookId';
+
+  /** 书架排序方式 */
+  static readonly SORT_RECENT: number = 0; // 最近阅读
+  static readonly SORT_ADDED: number = 1;  // 最近加入
+  static readonly SORT_TITLE: number = 2;  // 书名
+
+  /**
+   * 根据字符串稳定地挑选一个封面色(FNV-1a 哈希),避免颜色单一
+   */
+  static pickCoverColor(seed: string): string {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < seed.length; i++) {
+      hash ^= seed.charCodeAt(i);
+      hash = (hash * 0x01000193) >>> 0;
+    }
+    return Constants.COVER_COLORS[hash % Constants.COVER_COLORS.length];
+  }
 }
 
 /**

@@ -4,15 +4,19 @@ import { BookRepository } from '../data/BookRepository';
 import { BookDataSource } from '../data/BookDataSource';
 import { BookCover } from '../components/BookCover';
 import { NavRouter } from '../common/NavRouter';
+import { Constants } from '../common/Constants';
 
 /**
- * 书架页面(Navigation 主页内容)
- * 使用 LazyForEach 按需渲染书籍,优化长列表性能
+ * 书架页面(主页内容)
+ * 支持:搜索、排序、最近阅读横幅、进度徽章,LazyForEach 按需渲染优化长列表
  */
 @Component
 export struct BookShelfPage {
   @State books: Book[] = [];
   @State recentBook: Book | null = null;
+  @State keyword: string = '';
+  @State sortBy: number = Constants.SORT_RECENT;
+  @State searching: boolean = false;
   @StorageLink('shelfDirty') @Watch('onDirty') shelfDirty: boolean = false;
   private dataSource: BookDataSource = new BookDataSource([]);
 
@@ -31,8 +35,23 @@ export struct BookShelfPage {
     const ctx = getContext(this) as common.Context;
     await BookRepository.init(ctx);
     this.books = await BookRepository.loadBookshelf();
-    this.dataSource.setData(this.books);
+    this.applyFilter();
     this.recentBook = await BookRepository.getRecentBook();
+  }
+
+  private applyFilter(): void {
+    let list = this.books.slice();
+    const kw = this.keyword.trim().toLowerCase();
+    if (kw.length > 0) {
+      list = list.filter(b =>
+        b.title.toLowerCase().includes(kw) || (b.author && b.author.toLowerCase().includes(kw)));
+    }
+    list = BookRepository.sortBooks(list, this.sortBy);
+    this.dataSource.setData(list);
+  }
+
+  private displayCount(): number {
+    return this.dataSource.totalCount();
   }
 
   private openDetail(book: Book): void {
@@ -59,34 +78,79 @@ export struct BookShelfPage {
     });
   }
 
+  private cycleSort(): void {
+    this.sortBy = (this.sortBy + 1) % 3;
+    this.applyFilter();
+  }
+
+  private sortLabel(): string {
+    if (this.sortBy === Constants.SORT_ADDED) {
+      return '最近加入';
+    }
+    if (this.sortBy === Constants.SORT_TITLE) {
+      return '按书名';
+    }
+    return '最近阅读';
+  }
+
   build() {
     Column() {
       // 顶栏
-      Row({ space: 12 }) {
+      Row({ space: 8 }) {
         Text('鸿蒙书阁')
           .fontSize(22)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.theme_paper_text'))
           .layoutWeight(1)
-        Text('＋')
-          .fontSize(26)
-          .fontColor($r('app.color.theme_paper_text'))
-          .onClick(() => {
-            AppStorage.setOrCreate<boolean>('scanAutoPick', true);
-            NavRouter.push('scan');
-          })
-        Text('⚙')
-          .fontSize(22)
-          .fontColor($r('app.color.theme_paper_text'))
-          .onClick(() => NavRouter.push('settings'))
+        this.IconButton('🔍', () => { this.searching = !this.searching; if (!this.searching) { this.keyword = ''; this.applyFilter(); } })
+        this.IconButton('＋', () => {
+          AppStorage.setOrCreate<boolean>('scanAutoPick', true);
+          NavRouter.push('scan');
+        })
+        this.IconButton('⚙', () => NavRouter.push('settings'))
       }
       .width('100%')
       .height(56)
-      .padding({ left: 16, right: 16 })
+      .padding({ left: 16, right: 12 })
       .backgroundColor($r('app.color.shelf_bg'))
 
+      // 搜索栏
+      if (this.searching) {
+        Row({ space: 8 }) {
+          TextInput({ placeholder: '搜索书名 / 作者', text: this.keyword })
+            .layoutWeight(1)
+            .height(38)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(19)
+            .padding({ left: 16, right: 16 })
+            .onChange((v: string) => { this.keyword = v; this.applyFilter(); })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 8 })
+        .transition(TransitionEffect.move(TransitionEdge.TOP).animation({ duration: 180 }))
+      }
+
+      // 排序 + 数量条
+      if (this.books.length > 0) {
+        Row({ space: 6 }) {
+          Text(`${this.displayCount()} 本书`)
+            .fontSize(12)
+            .fontColor('rgba(58,47,36,0.55)')
+            .layoutWeight(1)
+          Text(`⇅ ${this.sortLabel()}`)
+            .fontSize(12)
+            .fontColor($r('app.color.primary'))
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            .backgroundColor('rgba(139,94,60,0.1)')
+            .borderRadius(12)
+            .onClick(() => this.cycleSort())
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 4, bottom: 8 })
+      }
+
       // 最近阅读横幅
-      if (this.recentBook !== null) {
+      if (this.recentBook !== null && this.keyword.trim().length === 0) {
         RecentBanner({ book: this.recentBook as Book, onOpen: () => {
           AppStorage.setOrCreate<string>('readerBookId', (this.recentBook as Book).id);
           NavRouter.push('reader');
@@ -96,6 +160,8 @@ export struct BookShelfPage {
       // 书架列表
       if (this.books.length === 0) {
         this.EmptyView()
+      } else if (this.displayCount() === 0) {
+        this.NoResultView()
       } else {
         Scroll() {
           Grid() {
@@ -119,11 +185,10 @@ export struct BookShelfPage {
             }, (book: Book) => book.id)
           }
           .columnsTemplate('1fr 1fr 1fr')
-          .columnsGap(12)
-          .rowsGap(16)
+          .columnsGap(14)
+          .rowsGap(18)
           .padding(16)
           .width('100%')
-          .height(this.books.length === 0 ? 0 : '100%')
         }
         .layoutWeight(1)
         .scrollBar(BarState.Off)
@@ -136,21 +201,33 @@ export struct BookShelfPage {
   }
 
   @Builder
+  IconButton(icon: string, action: () => void) {
+    Text(icon)
+      .fontSize(20)
+      .fontColor($r('app.color.theme_paper_text'))
+      .width(40)
+      .height(40)
+      .textAlign(TextAlign.Center)
+      .borderRadius(20)
+      .onClick(() => action())
+  }
+
+  @Builder
   EmptyView() {
-    Column({ space: 12 }) {
-      Text('书')
-        .fontSize(40)
-        .fontColor('rgba(139,94,60,0.5)')
-        .width(80).height(80)
+    Column({ space: 14 }) {
+      Text('📖')
+        .fontSize(44)
+        .width(92).height(92)
         .textAlign(TextAlign.Center)
         .backgroundColor('rgba(139,94,60,0.08)')
-        .borderRadius(40)
+        .borderRadius(46)
       Text('书架空空如也')
-        .fontSize(15)
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.theme_paper_text'))
-      Text('点击右上角 + 扫描本地 TXT / EPUB 导入')
+      Text('导入本地 TXT / EPUB,开启你的阅读之旅')
         .fontSize(12)
-        .fontColor('rgba(58,47,36,0.6)')
+        .fontColor('rgba(58,47,36,0.55)')
       Button('导入书籍')
         .type(ButtonType.Capsule)
         .backgroundColor($r('app.color.primary'))
@@ -160,6 +237,20 @@ export struct BookShelfPage {
           AppStorage.setOrCreate<boolean>('scanAutoPick', true);
           NavRouter.push('scan');
         })
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .justifyContent(FlexAlign.Center)
+  }
+
+  @Builder
+  NoResultView() {
+    Column({ space: 8 }) {
+      Text('🔍')
+        .fontSize(36)
+      Text(`未找到与"${this.keyword}"相关的书籍`)
+        .fontSize(14)
+        .fontColor('rgba(58,47,36,0.55)')
     }
     .width('100%')
     .layoutWeight(1)
@@ -178,8 +269,8 @@ struct RecentBanner {
   build() {
     Row({ space: 12 }) {
       BookCover({ book: this.book, compact: true })
-        .width(40)
-        .height(56)
+        .width(42)
+        .height(58)
       Column({ space: 4 }) {
         Text('继续阅读')
           .fontSize(11)
@@ -190,22 +281,30 @@ struct RecentBanner {
           .fontColor($r('app.color.theme_paper_text'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(`第 ${Math.min(this.book.chapterIndex + 1, this.book.chapterCount)} 章`)
-          .fontSize(11)
-          .fontColor('rgba(58,47,36,0.6)')
+        Row({ space: 6 }) {
+          Text(`第 ${Math.min(this.book.chapterIndex + 1, this.book.chapterCount)} 章`)
+            .fontSize(11)
+            .fontColor('rgba(58,47,36,0.6)')
+          Text(`· ${BookRepository.progressPercent(this.book)}%`)
+            .fontSize(11)
+            .fontColor($r('app.color.primary'))
+        }
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
       Text('继续 ›')
         .fontSize(13)
-        .fontColor($r('app.color.primary'))
+        .fontColor('#FFFFFF')
+        .padding({ left: 14, right: 14, top: 7, bottom: 7 })
+        .backgroundColor($r('app.color.primary'))
+        .borderRadius(16)
     }
     .width('100%')
     .padding(12)
-    .margin({ left: 12, right: 12, top: 8 })
+    .margin({ left: 16, right: 16, bottom: 8 })
     .backgroundColor('#FFFFFF')
-    .borderRadius(12)
-    .shadow({ radius: 8, color: 'rgba(0,0,0,0.08)', offsetX: 0, offsetY: 2 })
+    .borderRadius(14)
+    .shadow({ radius: 8, color: 'rgba(0,0,0,0.06)', offsetX: 0, offsetY: 2 })
     .onClick(() => this.onOpen())
   }
 }

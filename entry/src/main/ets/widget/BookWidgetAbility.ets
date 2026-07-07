@@ -71,7 +71,9 @@ export default class BookWidgetAbility extends FormExtensionAbility {
         return emptyData();
       }
       const total = Math.max(1, book.chapterCount);
-      const progress = Math.min(100, Math.max(0, (book.chapterIndex + 1) / total * 100));
+      const progress = book.lastReadAt > 0
+        ? Math.min(100, Math.max(0, (book.chapterIndex + 1) / total * 100))
+        : 0;
       const data: Record<string, Object> = {
         'title': book.title,
         'author': book.author || '佚名',
