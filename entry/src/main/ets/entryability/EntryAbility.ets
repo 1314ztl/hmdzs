@@ -49,6 +49,8 @@ export default class EntryAbility extends UIAbility {
 
   onBackground(): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
+    // 进入后台时确保内存中的书架/进度立即落盘,避免进程被回收导致丢失
+    BookRepository.flushShelf();
   }
 
   /**
