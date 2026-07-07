@@ -358,7 +358,7 @@ export struct ReaderPage {
           .height('100%')
           .backgroundColor(this.overlayColor())
           .onClick(() => this.panel = 0)
-          .transition(TransitionEffect.opacity.animation({ duration: 200 }))
+          .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
       }
       // 阅读设置面板
       if (this.panel === 1) {

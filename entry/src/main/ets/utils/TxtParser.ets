@@ -17,12 +17,12 @@ export class TxtParser {
     // UTF-8 BOM
     if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
       const sub = bytes.subarray(3);
-      return util.TextDecoder.create('utf-8').decodeWithStream(sub);
+      return util.TextDecoder.create('utf-8').decodeToString(sub);
     }
     // GBK BOM (rare) / UTF-16 skipped for simplicity
     // 尝试 UTF-8
     try {
-      const utf8Text = util.TextDecoder.create('utf-8').decodeWithStream(bytes);
+      const utf8Text = util.TextDecoder.create('utf-8').decodeToString(bytes);
       if (!TxtParser.hasInvalidUtf8(bytes)) {
         return utf8Text;
       }
@@ -31,9 +31,9 @@ export class TxtParser {
     }
     // 回退 GBK
     try {
-      return util.TextDecoder.create('gbk').decodeWithStream(bytes);
+      return util.TextDecoder.create('gbk').decodeToString(bytes);
     } catch (e) {
-      return util.TextDecoder.create('utf-8').decodeWithStream(bytes);
+      return util.TextDecoder.create('utf-8').decodeToString(bytes);
     }
   }
 
