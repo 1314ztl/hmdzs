@@ -138,7 +138,7 @@ export class EpubParser {
       const stat: fs.Stat = fs.statSync(file.fd);
       const buf = new ArrayBuffer(stat.size);
       fs.readSync(file.fd, buf);
-      return util.TextDecoder.create('utf-8').decodeWithStream(new Uint8Array(buf));
+      return util.TextDecoder.create('utf-8').decodeToString(new Uint8Array(buf));
     } finally {
       fs.closeSync(file);
     }
